@@ -47,7 +47,7 @@
                 {% for item in items %}
                     <li class="file-item">
                         {% if item.type == 'dir' %}
-                             <img src="{% static 'viewer/folder.svg' %}" alt="Папка" class="file-icon">
+                             <img src="{% static 'viewer/folder.png' %}" alt="Папка" class="file-icon">
                              <span class="file-name"><strong>{{ item.name }}</strong></span>
                              <span class="file-size">Папка</span>
                              <span class="file-actions"></span>
@@ -57,7 +57,7 @@
                         {% if item.preview %}
                             <img src="{{ item.preview }}" alt="Превью {{ item.name }}" class="file-preview" data-fullsize="{{ item.file }}">
                         {% else %}
-                            <img src="{% static 'viewer/file.svg' %}" alt="Файл" class="file-icon">
+                            <img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">
                         {% endif %}
                         
                             <span class="file-name">{{ item.name }}</span>
@@ -87,7 +87,7 @@
                 {% if data.preview %}
                     <img src="{{ data.preview }}" alt="Превью {{ data.name }}" class="file-preview" data-fullsize="{{ data.file }}">
                  {% else %}
-                    <img src="{% static 'viewer/file.svg' %}" alt="Файл" class="file-icon">
+                    <img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">
                  {% endif %}
                  <span class="file-name">{{ data.name }}</span>
                      <span class="file-size">{{ data.size|filesizeformat }}</span>
