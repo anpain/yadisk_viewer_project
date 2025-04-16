@@ -1,0 +1,101 @@
+{% extends "viewer/base.html" %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Просмотр ссылки Яндекс.Диска{% endblock %}
+
+{% block content %}
+    <form method="post">
+        {% csrf_token %}
+        <input type="text" name="public_url" placeholder="Введите публичную ссылку Яндекс.Диска (https://disk.yandex.ru/d/...)" value="{{ public_url|default:'' }}" required>
+        <button type="submit">Обзор</button>
+    </form>
+
+    {% if error %}
+        <p class="error">{{ error }}</p>
+    {% endif %}
+
+    {% if data %}
+        <h2>Содержимое: {{ data.name }}</h2>
+
+        {% if data.type == 'dir' or items %}
+            <div class="filter-buttons">
+                Фильтр:
+                <a href="#" data-filter="all" class="{% if filter_type == 'all' %}active{% endif %}">Все файлы</a>
+                <a href="#" data-filter="image" class="{% if filter_type == 'image' %}active{% endif %}">Изображения</a>
+                <a href="#" data-filter="document" class="{% if filter_type == 'document' %}active{% endif %}">Документы</a>
+                <a href="#" data-filter="archive" class="{% if filter_type == 'archive' %}active{% endif %}">Архивы</a>
+                <a href="#" data-filter="video" class="{% if filter_type == 'video' %}active{% endif %}">Видео</a>
+                <a href="#" data-filter="audio" class="{% if filter_type == 'audio' %}active{% endif %}">Аудио</a>
+                <a href="#" data-filter="other" class="{% if filter_type == 'other' %}active{% endif %}">Прочее</a>
+            </div>
+
+            <form id="zip-form" action="{% url 'viewer:download_zip' %}" method="post">
+                {% csrf_token %}
+                <ul class="file-list">
+                    {% if items %}
+                    <li>
+                         <input type="checkbox" id="select-all" title="Выбрать все/Снять выделение">
+                         <span style="margin-left: 15px; font-weight: bold;">Выбрать все</span>
+                    </li>
+                    {% endif %}
+
+                    {% for item in items %}
+                        <li>
+                            {% if item.type == 'dir' %}
+                                <img src="{% static 'viewer/folder.png' %}" alt="Папка" class="file-icon">
+                                <span class="file-name"><strong>{{ item.name }}</strong></span>
+                                <span class="file-size">Папка</span>
+                                <span class="file-actions"></span>
+                            {% else %}
+                                <input type="checkbox" name="selected_files" value="{{ item.path }}">
+                                {% if item.preview %}
+                                    <img src="{{ item.preview }}" alt="Превью" class="file-preview" data-fullsize="{{ item.file }}">
+                                {% else %}
+                                    <img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">
+                                {% endif %}
+
+                                <span class="file-name">{{ item.name }}</span>
+                                <span class="file-size">{{ item.size|filesizeformat }}</span>
+                                <span class="file-actions">
+                                    {% url 'viewer:download_file' file_path=item.path as download_url %}
+                                    <a href="{{ download_url }}" title="Скачать {{ item.name }}">Скачать</a>
+                                </span>
+                            {% endif %}
+                        </li>
+                    {% empty %}
+                         <li>Нет файлов или папок для отображения (с учетом фильтра).</li>
+                    {% endfor %}
+                </ul>
+
+                {% if items %}
+                   <button type="submit" class="download-selected">Скачать выбранное (.zip)</button>
+                {% endif %}
+            </form>
+
+        {% elif data.type == 'file' %}
+             <ul class="file-list">
+                 <li>
+                     {% if data.preview %}
+                        <img src="{{ data.preview }}" alt="Превью" class="file-preview" data-fullsize="{{ data.file }}">
+                     {% else %}
+                        <img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">
+                     {% endif %}
+                     <span class="file-name">{{ data.name }}</span>
+                     <span class="file-size">{{ data.size|filesizeformat }}</span>
+                     <span class="file-actions">
+                        {% if item.url_path is not None %}
+                        {% url 'viewer:download_file' file_path=item.url_path as download_url %}
+                        <a href="{{ download_url }}" title="Скачать {{ item.name }}">Скачать</a>
+                    {% else %}
+                        <span class="file-actions-disabled">Нет ссылки</span>
+                    {% endif %}
+                                                         </span>
+                 </li>
+             </ul>
+        {% else %}
+             <p>Не удалось получить содержимое по ссылке.</p>
+        {% endif %}
+    {% endif %}
+
+{% endblock %}

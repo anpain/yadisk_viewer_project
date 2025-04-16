@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Просмотр Яндекс.Диска{% endblock %}</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; }
+        .error { color: red; border: 1px solid red; padding: 10px; margin-bottom: 15px; }
+        .file-list { list-style: none; padding: 0; }
+        .file-list li { display: flex; align-items: center; border-bottom: 1px solid #eee; padding: 8px 0; }
+        .file-list li:last-child { border-bottom: none; }
+        .file-icon { width: 20px; height: 20px; margin-right: 10px; }
+        .file-preview { max-height: 40px; max-width: 60px; margin-right: 10px; vertical-align: middle; cursor: pointer; }
+        .file-name { flex-grow: 1; margin-right: 15px; }
+        .file-size { color: #666; min-width: 80px; text-align: right; margin-right: 15px; }
+        .file-actions button, .file-actions a { margin-left: 5px; padding: 3px 8px; cursor: pointer; text-decoration: none; font-size: 0.9em;}
+        .filter-buttons a { margin-right: 10px; text-decoration: none; padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; }
+        .filter-buttons a.active { background-color: #eee; font-weight: bold; }
+        .download-selected { margin-top: 15px; padding: 8px 15px; }
+        input[type="text"] { width: 80%; padding: 8px; margin-right: 5px; }
+        button[type="submit"] { padding: 8px 15px; }
+        form#zip-form { margin-top: 10px;}
+    </style>
+</head>
+<body>
+    <h1>{% block header %}Просмотр публичных ссылок Яндекс.Диска{% endblock %}</h1>
+    {% block content %}
+    {% endblock %}
+
+    {% block scripts %}
+    <script>
+        document.addEventListener('click', function(event) {
+            if (event.target.classList.contains('file-preview')) {
+                const fullImageUrl = event.target.dataset.fullsize;
+                if (fullImageUrl) {
+                    window.open(fullImageUrl, '_blank');
+                }
+            }
+        });
+
+        document.querySelectorAll('.filter-buttons a').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const filterType = this.getAttribute('data-filter');
+                const currentUrl = new URL(window.location.href.split('?')[0]);
+                currentUrl.searchParams.set('filter', filterType);
+
+                const urlInput = document.querySelector('input[name="public_url"]');
+                if (urlInput && urlInput.value) {
+                   window.location.href = currentUrl.toString();
+                } else {
+                    window.location.href = currentUrl.toString();
+                }
+            });
+        });
+
+         const selectAllCheckbox = document.getElementById('select-all');
+         const fileCheckboxes = document.querySelectorAll('input[name="selected_files"]');
+         if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', function() {
+                fileCheckboxes.forEach(checkbox => {
+                    checkbox.checked = selectAllCheckbox.checked;
+                });
+            });
+         }
+    </script>
+    {% endblock %}
+</body>
+</html>
