@@ -3,323 +3,50 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Yandex.Disk Viewer{% endblock %}</title>
+    <title>{% block title %}Просмотр Яндекс.Диска{% endblock %}</title>
     {% load static %}
     <style>
-        :root {
-            --primary-color: #007bff;
-            --primary-hover-color: #0056b3;
-            --secondary-color: #6c757d;
-            --light-gray: #f8f9fa;
-            --medium-gray: #e9ecef;
-            --dark-gray: #6c757d;
-            --border-color: #dee2e6;
-            --text-color: #212529;
-            --error-color: #dc3545;
-            --error-bg-color: #f8d7da;
-            --success-color: #28a745;
-            --border-radius: 0.3rem;
-            --spacing-sm: 0.5rem;
-            --spacing-md: 1rem;
-            --spacing-lg: 1.5rem;
-            --font-family-sans-serif: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-        }
+        body { font-family: sans-serif; line-height: 1.6; padding: 20px; max-width: 900px; margin: auto; }
+        .error { color: red; border: 1px solid red; padding: 10px; margin-bottom: 15px; }
+        .file-list { list-style: none; padding: 0; margin-top: 15px; }
+        .file-list li { display: flex; align-items: center; border-bottom: 1px solid #eee; padding: 8px 0; gap: 10px;}
+        .file-list li:last-child { border-bottom: none; }
+        .file-icon { width: 20px; height: 20px; flex-shrink: 0; }
+        .file-preview { max-height: 40px; max-width: 60px; margin-right: 10px; vertical-align: middle; cursor: pointer; flex-shrink: 0; border: 1px solid #ddd; }
+        .file-name { flex-grow: 1; margin-right: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;}
+        .file-name a { color: #007bff; text-decoration: none; font-weight: bold; }
+        .file-name a:hover { text-decoration: underline; }
+        .file-name span { font-weight: normal; }
+        .file-size { color: #666; min-width: 80px; text-align: right; margin-right: 15px; flex-shrink: 0; font-size: 0.9em;}
+        .file-actions a { margin-left: 5px; padding: 3px 8px; cursor: pointer; text-decoration: none; font-size: 0.9em; border: 1px solid #ccc; border-radius: 3px; background-color: #f0f0f0; color: #333;}
+        .file-actions a:hover { background-color: #e0e0e0;}
+        .filter-buttons { margin-top: 15px; margin-bottom: 10px; }
+        .filter-buttons a { margin-right: 10px; text-decoration: none; padding: 5px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em; color: #007bff; }
+        .filter-buttons a.active { background-color: #eee; font-weight: bold; color: #333;}
+        .filter-buttons span { margin-right: 5px; color: #666; }
+        .zip-download-form { margin-top: 10px;}
+        .zip-download-form button { margin-top: 10px; padding: 8px 15px; }
+        input[type="text"] { width: 70%; padding: 8px; margin-right: 5px; border: 1px solid #ccc; }
+        button[type="submit"] { padding: 8px 15px; }
+        button:disabled { opacity: 0.6; cursor: not-allowed; }
+        .select-all-container { margin-bottom: 5px; font-size: 0.9em; padding-left: 2px; }
+        .select-all-container label { margin-left: 5px; cursor: pointer; }
+        .no-files-message { margin-top: 15px; color: #666; padding: 10px; background-color: #f9f9f9; border: 1px dashed #ddd;}
+        .breadcrumbs { font-size: 0.9em; margin-bottom: 15px; color: #555;}
+        .breadcrumbs a { color: #007bff; text-decoration: none; }
+        .breadcrumbs a:hover { text-decoration: underline; }
+        .breadcrumbs strong { font-weight: bold; color: #333; }
 
-        *, *::before, *::after {
-            box-sizing: border-box;
-        }
+        .pagination { margin-top: 20px; margin-bottom: 10px; text-align: center; font-size: 0.9em;}
+        .pagination a, .pagination span { margin: 0 3px; padding: 5px 10px; border: 1px solid #ccc; text-decoration: none; color: #007bff; border-radius: 3px;}
+        .pagination span.current { font-weight: bold; background-color: #eee; color: #333; border-color: #ccc;}
+        .pagination span.disabled { color: #999; border-color: #ddd; background-color: #f9f9f9; cursor: default;}
+        .page-size-controls { margin-bottom: 15px; text-align: right; font-size: 0.9em; color: #666; }
+        .page-size-controls a { margin-left: 5px; color: #007bff; text-decoration: none;}
+        .page-size-controls a:hover { text-decoration: underline; }
+        .page-size-controls strong { font-weight: bold; color: #333;}
 
-        body {
-            font-family: var(--font-family-sans-serif);
-            font-size: 1rem;
-            line-height: 1.6;
-            color: var(--text-color);
-            background-color: #fff;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-
-        .container {
-            width: 100%;
-            max-width: 960px;
-            padding-right: var(--spacing-md);
-            padding-left: var(--spacing-md);
-            margin-right: auto;
-            margin-left: auto;
-            flex-grow: 1;
-            padding-top: var(--spacing-lg);
-            padding-bottom: var(--spacing-lg);
-        }
-
-        header {
-            background-color: var(--light-gray);
-            padding: var(--spacing-md) 0;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: var(--spacing-lg);
-            text-align: center;
-        }
-
-         header h1 {
-            margin-bottom: 0;
-            font-weight: 500;
-         }
-
-        main {
-            width: 100%;
-        }
-
-        .url-form {
-            display: flex;
-            gap: var(--spacing-sm);
-            margin-bottom: var(--spacing-lg);
-        }
-
-        .url-form input[type="text"] {
-            flex-grow: 1;
-            padding: var(--spacing-sm) var(--spacing-md);
-            font-size: 1rem;
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-        }
-
-        .url-form input[type="text"]:focus {
-            border-color: var(--primary-color);
-            outline: 0;
-            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-        }
-
-        .btn {
-            display: inline-block;
-            font-weight: 400;
-            color: #fff;
-            text-align: center;
-            vertical-align: middle;
-            cursor: pointer;
-            user-select: none;
-            background-color: var(--primary-color);
-            border: 1px solid var(--primary-color);
-            padding: var(--spacing-sm) var(--spacing-md);
-            font-size: 1rem;
-            line-height: 1.5;
-            border-radius: var(--border-radius);
-            transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-            text-decoration: none;
-            white-space: nowrap;
-        }
-
-        .btn:hover {
-            color: #fff;
-            background-color: var(--primary-hover-color);
-            border-color: var(--primary-hover-color);
-            text-decoration: none;
-        }
-
-        .btn-secondary {
-             color: var(--text-color);
-             background-color: var(--medium-gray);
-             border-color: var(--medium-gray);
-        }
-
-        .btn-secondary:hover {
-             color: var(--text-color);
-             background-color: #d3d9df;
-             border-color: #c8ced5;
-        }
-
-
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.875rem;
-            line-height: 1.5;
-            border-radius: 0.2rem;
-        }
-
-        .alert {
-            padding: var(--spacing-md);
-            margin-bottom: var(--spacing-lg);
-            border: 1px solid transparent;
-            border-radius: var(--border-radius);
-        }
-
-        .alert-danger {
-            color: #721c24;
-            background-color: var(--error-bg-color);
-            border-color: #f5c6cb;
-        }
-
-        .content-header {
-            font-size: 1.5rem;
-            margin-bottom: var(--spacing-md);
-            font-weight: 500;
-            word-break: break-all;
-        }
-
-        .filter-controls {
-            margin-bottom: var(--spacing-md);
-            display: flex;
-            flex-wrap: wrap;
-            gap: var(--spacing-sm);
-            align-items: center;
-        }
-
-        .filter-controls span {
-           margin-right: var(--spacing-sm);
-           color: var(--dark-gray);
-        }
-
-
-        .filter-controls .btn {
-             color: var(--primary-color);
-             background-color: transparent;
-             border-color: var(--border-color);
-        }
-         .filter-controls .btn:hover {
-             color: var(--primary-hover-color);
-             background-color: var(--light-gray);
-             border-color: var(--medium-gray);
-         }
-
-         .filter-controls .btn.active {
-             color: #fff;
-             background-color: var(--primary-color);
-             border-color: var(--primary-color);
-             font-weight: 500;
-         }
-
-
-        .file-list {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-            border: 1px solid var(--border-color);
-            border-radius: var(--border-radius);
-            overflow: hidden;
-        }
-
-        .file-item {
-            display: flex;
-            align-items: center;
-            padding: var(--spacing-sm) var(--spacing-md);
-            border-bottom: 1px solid var(--border-color);
-            gap: var(--spacing-md);
-            transition: background-color 0.1s ease-in-out;
-        }
-
-        .file-item:last-child {
-            border-bottom: none;
-        }
-
-        .file-item:hover {
-           background-color: var(--light-gray);
-        }
-
-        .file-item input[type="checkbox"] {
-            margin: 0;
-            flex-shrink: 0;
-            width: 1.1rem;
-            height: 1.1rem;
-        }
-
-        .file-icon, .file-preview {
-            width: 24px;
-            height: 24px;
-            flex-shrink: 0;
-            object-fit: contain; 
-        }
-
-        .file-preview {
-            width: 40px;
-            height: 40px;
-            border-radius: 0.2rem;
-            cursor: pointer;
-            border: 1px solid var(--border-color);
-        }
-
-        .file-name {
-            flex-grow: 1; 
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            font-weight: 500;
-        }
-         .file-name strong {
-             color: var(--secondary-color);
-         }
-
-        .file-size {
-            font-size: 0.9em;
-            color: var(--dark-gray);
-            min-width: 70px;
-            text-align: right;
-            flex-shrink: 0;
-        }
-
-        .file-actions {
-            display: flex;
-            gap: var(--spacing-sm);
-            flex-shrink: 0;
-        }
-
-        .file-actions a {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: 500;
-        }
-        .file-actions a:hover {
-            color: var(--primary-hover-color);
-            text-decoration: underline;
-        }
-
-        .select-all-container {
-            display: flex;
-            align-items: center;
-            padding: var(--spacing-sm) var(--spacing-md);
-            background-color: var(--light-gray);
-            border-bottom: 1px solid var(--border-color);
-            gap: var(--spacing-sm);
-            font-size: 0.9em;
-        }
-
-        .zip-download-form {
-             margin-top: var(--spacing-lg);
-        }
-
-        .no-files-message {
-            padding: var(--spacing-lg);
-            text-align: center;
-            color: var(--dark-gray);
-        }
-
-        @media (max-width: 768px) {
-            .file-item {
-                flex-wrap: wrap;
-            }
-            .file-size {
-                min-width: auto;
-                text-align: left;
-                margin-left: calc(24px + var(--spacing-md) + var(--spacing-md));
-                width: 100%;
-                margin-top: -0.3rem;
-            }
-             .file-actions {
-                 margin-left: auto; 
-             }
-        }
-
-         footer {
-             margin-top: var(--spacing-lg);
-             text-align: center;
-             padding: var(--spacing-md);
-             color: var(--secondary-color);
-             font-size: 0.9em;
-             border-top: 1px solid var(--border-color);
-         }
-
-         .modal {
+        .modal {
             display: none;
             position: fixed;
             z-index: 1000;
@@ -329,34 +56,28 @@
             width: 100%;
             height: 100%;
             overflow: auto;
-            background-color: rgba(0,0,0,0.9)
+            background-color: rgba(0,0,0,0.9);
         }
-
         .modal-content {
             margin: auto;
             display: block;
-            width: 80%;
-            max-width: 700px;
+            width: auto;
+            height: auto;
+            max-width: 90%;
+            max-height: 85vh;
             animation-name: zoom;
             animation-duration: 0.4s;
         }
-
-        @keyframes zoom {
-            from {transform:scale(0.1)}
-            to {transform:scale(1)}
-        }
-
+        @keyframes zoom { from {transform:scale(0.1)} to {transform:scale(1)} }
         #modalCaption {
-            margin: auto;
+            margin: 15px auto;
             display: block;
             width: 80%;
             max-width: 700px;
             text-align: center;
             color: #ccc;
-            padding: 10px 0;
-            height: 150px;
+            font-size: 0.9em;
         }
-
         .modal-close {
             position: absolute;
             top: 15px;
@@ -367,52 +88,25 @@
             transition: 0.3s;
             cursor: pointer;
         }
-
         .modal-close:hover,
-        .modal-close:focus {
-            color: #bbb;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        @media (max-width: 700px){
-            .modal-content {
-                width: 95%;
-            }
-             .modal-close {
-                 top: 10px;
-                 right: 20px;
-                 font-size: 30px;
-            }
-        }
-
+        .modal-close:focus { color: #bbb; text-decoration: none; cursor: pointer; }
+         @media (max-width: 700px){ .modal-close { top: 10px; right: 20px; font-size: 30px;} }
 
     </style>
 </head>
 <body>
-    <header>
-        <div class="container">
-            <h1>Просмотр ссылок Яндекс.Диска</h1>
-        </div>
-    </header>
+    <h1>Просмотр публичных ссылок Яндекс.Диска</h1>
 
-    <main class="container">
+    <main>
         {% block content %}
         {% endblock %}
     </main>
-
-    <footer>
-        <div class="container">
-             <p>© {% now "Y" %} Yadisk Viewer. Сделано с ❤️</p>
-        </div>
-     </footer>
 
     <div id="imagePreviewModal" class="modal">
         <span class="modal-close" title="Закрыть">×</span>
         <img class="modal-content" id="modalImage" alt="Превью изображения">
         <div id="modalCaption"></div>
     </div>
-
 
     {% block scripts %}
     <script>
@@ -423,17 +117,14 @@
 
         function openImageModal(imgElement) {
             if (!modal || !modalImg || !captionText) return;
-
             const fullImageUrl = imgElement.dataset.fullsize;
             const altText = imgElement.alt || "Превью изображения";
-
             if (fullImageUrl) {
                 modal.style.display = "block";
                 modalImg.src = fullImageUrl;
                 captionText.innerHTML = altText;
             }
         }
-
         function closeModal() {
              if (!modal) return;
             modal.style.display = "none";
@@ -445,71 +136,58 @@
                 event.preventDefault();
                 openImageModal(event.target);
             }
-        });
-
-        if (closeModalSpan) {
-            closeModalSpan.onclick = function() {
-                closeModal();
-            }
-        }
-
-        window.onclick = function(event) {
-            if (event.target == modal) { 
-                closeModal();
-            }
-        }
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === "Escape" && modal && modal.style.display === "block") {
-                closeModal();
+            if (event.target.matches('.pagination a, .filter-buttons a, .breadcrumbs a, .page-size-controls a')) {
+                 event.preventDefault();
+                 const url = event.target.href;
+                 if(url) window.location.href = url;
             }
         });
 
-        document.querySelectorAll('.filter-controls a.btn').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const filterType = this.getAttribute('data-filter');
-                const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('filter', filterType);
-                window.location.href = currentUrl.toString();
-            });
-        });
+        if (closeModalSpan) { closeModalSpan.onclick = closeModal; }
+        window.onclick = function(event) { if (event.target == modal) { closeModal(); } }
+        document.addEventListener('keydown', function(event) { if (event.key === "Escape" && modal && modal.style.display === "block") { closeModal(); } });
 
          const selectAllCheckbox = document.getElementById('select-all');
-         const fileCheckboxes = document.querySelectorAll('.file-item input[name="selected_files"]');
+         const fileCheckboxes = document.querySelectorAll('.file-list input[name="selected_files"]');
          const zipButton = document.querySelector('.zip-download-form button[type="submit"]');
 
          function toggleZipButton() {
              if (!zipButton) return;
              const anyChecked = Array.from(fileCheckboxes).some(cb => cb.checked);
              zipButton.disabled = !anyChecked;
-             zipButton.style.opacity = anyChecked ? '1' : '0.6';
-             zipButton.style.cursor = anyChecked ? 'pointer' : 'not-allowed';
          }
 
          if (selectAllCheckbox) {
             selectAllCheckbox.addEventListener('change', function() {
-                fileCheckboxes.forEach(checkbox => {
-                    checkbox.checked = selectAllCheckbox.checked;
-                });
+                fileCheckboxes.forEach(checkbox => { checkbox.checked = selectAllCheckbox.checked; });
                 toggleZipButton();
             });
          }
 
          fileCheckboxes.forEach(checkbox => {
              checkbox.addEventListener('change', function() {
-                 if (!checkbox.checked) {
+                 if (!checkbox.checked && selectAllCheckbox) {
                      selectAllCheckbox.checked = false;
-                 }
-                 else if (Array.from(fileCheckboxes).every(cb => cb.checked)) {
+                 } else if (selectAllCheckbox && Array.from(fileCheckboxes).every(cb => cb.checked)) {
                       selectAllCheckbox.checked = true;
                  }
                  toggleZipButton();
              });
          });
 
-         toggleZipButton();
+         if(zipButton) {
+             toggleZipButton();
+         }
 
+         const urlForm = document.querySelector('form[method="post"]');
+         const submitButton = urlForm ? urlForm.querySelector('button[type="submit"]') : null;
+         if(urlForm && submitButton) {
+             urlForm.addEventListener('submit', function() {
+                 submitButton.disabled = true;
+                 submitButton.textContent = 'Загрузка...';
+             });
+         }
     </script>
-    {% endblock %}</body>
+    {% endblock %}
+</body>
 </html>

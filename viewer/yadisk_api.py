@@ -1,5 +1,4 @@
 import aiohttp
-import asyncio
 import logging
 from urllib.parse import urlencode, urlparse, quote
 import hashlib
@@ -10,8 +9,7 @@ from asgiref.sync import sync_to_async
 logger = logging.getLogger(__name__)
 
 BASE_PUBLIC_API_URL = "https://cloud-api.yandex.net/v1/disk/public/resources"
-CACHE_TTL = 600
-
+CACHE_TTL = 300
 
 def extract_public_key(url: str) -> str | None:
     try:
@@ -27,7 +25,7 @@ def extract_public_key(url: str) -> str | None:
         logger.warning(f"Не удалось извлечь public_key из URL-адреса: {url}")
         return None
     except Exception as e:
-        logger.error(f"Ошибка при извлечении публичного ключа из {url}: {e}")
+        logger.error(f"Ошибка при извлечении публичного ключа из URL {url}: {e}")
         return None
 
 def generate_cache_key(prefix: str, *args) -> str:
@@ -37,9 +35,10 @@ def generate_cache_key(prefix: str, *args) -> str:
 sync_cache_get = sync_to_async(cache.get)
 sync_cache_set = sync_to_async(cache.set)
 
-async def get_public_resource_meta(public_key: str, path: str = None, session: aiohttp.ClientSession = None) -> dict | None:
-    cache_key = generate_cache_key("yd_meta", public_key, path or '')
-    logger.debug(f"Checking cache for key: {cache_key} (public_key={public_key}, path={path})")
+async def get_public_resource_meta(public_key: str, path: str = None, limit: int = 50, offset: int = 0, session: aiohttp.ClientSession = None) -> dict | None:
+    current_path = path or '/'
+    cache_key = generate_cache_key("yd_meta_v2", public_key, current_path, limit, offset)
+    logger.debug(f"Checking cache for key: {cache_key} (public_key={public_key}, path={current_path}, limit={limit}, offset={offset})")
 
     cached_data = await sync_cache_get(cache_key)
     if cached_data is not None:
@@ -48,7 +47,12 @@ async def get_public_resource_meta(public_key: str, path: str = None, session: a
     else:
         logger.info(f"Ошибка кэширования ключа: {cache_key}")
 
-    params = {'public_key': public_key, 'limit': 1000}
+    params = {
+        'public_key': public_key,
+        'limit': limit,
+        'offset': offset,
+        'sort': 'type,name'
+    }
     if path:
         params['path'] = path
 
@@ -69,8 +73,11 @@ async def get_public_resource_meta(public_key: str, path: str = None, session: a
                 elif 'error' in data:
                      logger.warning(f"Получена ошибка API, не кэшируется ответ для ключа {cache_key}. Ошибка: {data.get('message')}")
                 return data
+            elif response.status == 404:
+                logger.warning(f"Страница не найдена (404) для {url}")
+                return {'error': 'not_found', 'message': 'Resource not found'}
             else:
-                logger.error(f"Ошибка Yandex API ({response.status}) для {url}: {await response.text()}")
+                logger.error(f"Ошибка Yandex API ({response.status}) for {url}: {await response.text()}")
                 return None
     except aiohttp.ClientError as e:
         logger.error(f"Сетевая ошибка при запросе метаданных {public_key}: {e}")
@@ -89,12 +96,10 @@ async def get_public_resource_download_link(public_key: str, path: str = None, s
         params['path'] = path
 
     url = f"{BASE_PUBLIC_API_URL}/download?{urlencode(params, quote_via=quote)}"
-
     close_session = False
     if session is None:
         session = aiohttp.ClientSession()
         close_session = True
-
     try:
         async with session.get(url) as response:
             logger.debug(f"Запрашиваю ссылку для скачивания: URL={url}, Status={response.status}")
