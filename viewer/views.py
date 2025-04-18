@@ -210,7 +210,7 @@ async def download_zip(request: HttpRequest) -> HttpResponse:
 
     async def zip_generator():
         zip_buffer = io.BytesIO()
-        compression = zipfile.ZIP_DEFLATED
+        compression = zipfile.ZIP_STORED
         async with aiohttp.ClientSession() as session:
             tasks_get_links = []
             for path in selected_paths:
