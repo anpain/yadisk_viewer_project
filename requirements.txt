@@ -10,12 +10,11 @@ Django==5.2
 django-humanize==0.1.2
 frozenlist==1.5.0
 h11==0.14.0
-humanize==4.12.2
 idna==3.10
 multidict==6.4.3
 propcache==0.3.1
-python-dotenv==1.1.0
 sqlparse==0.5.3
 tzdata==2025.2
 uvicorn==0.34.1
+whitenoise==6.9.0
 yarl==1.20.0

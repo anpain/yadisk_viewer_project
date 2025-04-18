@@ -3,9 +3,12 @@ import asyncio
 import logging
 import mimetypes
 import zipfile
-import io
+import os
+import tempfile
+import aiofiles
 from urllib.parse import quote, unquote, urlencode as standard_urlencode
 from pathlib import PurePath, Path
+from typing import AsyncGenerator
 import math
 
 from django.shortcuts import render, redirect
@@ -13,7 +16,7 @@ from django.http import HttpRequest, HttpResponse, StreamingHttpResponse, Http40
 from django.views.decorators.http import require_GET, require_POST
 from django.utils.text import slugify
 from django.utils.timezone import now
-from django.urls import reverse
+from django.conf import settings
 
 from asgiref.sync import sync_to_async
 
@@ -23,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_PAGE_SIZE = 50
 ALLOWED_PAGE_SIZES = [25, 50, 100]
+DOWNLOAD_CONCURRENCY_LIMIT = 5
+FILE_CHUNK_SIZE = 8192
 
 def get_file_category(item: dict) -> str:
     if item.get('type') != 'file': return 'dir'
@@ -134,20 +139,37 @@ async def index(request: HttpRequest) -> HttpResponse:
 
                 items_list_raw = []
                 total_items = 0
-                if resource_type == 'file': items_list_raw = [meta_data]; total_items = 1
+                if resource_type == 'file':
+                    processed_single, available_types_single = process_items([meta_data])
+                    if processed_single:
+                        context['data'] = processed_single[0] 
+                    items_list_raw = processed_single
+                    total_items = 1
+                    context['available_file_types'] = available_types_single
                 elif resource_type == 'dir' and '_embedded' in meta_data:
                     all_items_processed, available_types = process_items(meta_data['_embedded']['items'])
                     context['available_file_types'] = available_types
                     total_items = meta_data['_embedded'].get('total', len(all_items_processed))
+
                     context['items'] = filter_items(all_items_processed, filter_from_get) if filter_from_get != 'all' else all_items_processed
-                else: context['items'] = []; context['available_file_types'] = set(); total_items = 0
+                else:
+                    context['items'] = []
+                    context['available_file_types'] = set()
+                    total_items = 0
 
                 total_pages = math.ceil(total_items / page_size)
-                if total_pages > 1: context['pagination'] = {'current_page': page_num, 'total_pages': total_pages, 'total_items': total_items, 'has_previous': page_num > 1, 'has_next': page_num < total_pages, 'page_range': range(1, total_pages + 1)}
-
+                if total_pages > 1:
+                    context['pagination'] = {
+                        'current_page': page_num,
+                        'total_pages': total_pages,
+                        'total_items': total_items,
+                        'has_previous': page_num > 1,
+                        'has_next': page_num < total_pages,
+                        'page_range': range(1, total_pages + 1)
+                    }
     else:
         logger.info("No public_url found. Clearing session.")
-        await pop_session_value('public_key', None); await pop_session_value('resource_type', None); await pop_session_value('resource_name', None); await pop_session_value('base_path', None)
+        await pop_session_value('public_key', None); await pop_session_value('resource_type', None); await pop_session_value('resource_name', None)
 
     if 'available_file_types' not in context: context['available_file_types'] = set()
     return render(request, 'viewer/index.html', context)
@@ -155,107 +177,229 @@ async def index(request: HttpRequest) -> HttpResponse:
 
 @require_GET
 async def download_file(request: HttpRequest, file_path: str) -> HttpResponse:
-    logger.critical("RUNNING download_file WITH REDIRECT LOGIC!")
+    logger.info(f"Запрос на скачивание одного файла: {file_path}")
     get_session_value = sync_to_async(request.session.get)
     public_key = await get_session_value('public_key')
     resource_type = await get_session_value('resource_type')
     if not public_key:
-        logger.warning("Attempting to download file without public_key in session.")
-        raise Http404("Session expired or not found. Please enter the URL again.")
+        logger.warning("Попытка скачать файл без public_key в сессии.")
+        raise Http404("Сессия истекла или не найдена. Пожалуйста, введите URL заново.")
     try:
         clean_path_str = Path(unquote(file_path).replace('\\', '/')).as_posix().lstrip('/')
-        logger.debug(f"Cleaned file path for download: '{clean_path_str}'")
+        logger.debug(f"Очищенный путь файла для скачивания: '{clean_path_str}'")
     except Exception as e:
-         logger.error(f"Error decoding/cleaning file_path: '{file_path}'. Error: {e}")
-         raise Http404("Invalid file path in URL.")
+         logger.error(f"Ошибка декодирования/очистки file_path: '{file_path}'. Ошибка: {e}")
+         raise Http404("Некорректный путь файла в URL.")
 
-    path_for_api = f"/{clean_path_str}" if clean_path_str else None
-    path_to_request = path_for_api if resource_type == 'dir' else None
-
+    path_to_request = f"/{clean_path_str}" if resource_type == 'dir' and clean_path_str else None
     file_name = PurePath(clean_path_str).name or "downloaded_file"
 
     async with aiohttp.ClientSession() as session:
-        logger.debug(f"Requesting download link for redirect: key={public_key}, path='{path_to_request}', file_name='{file_name}', resource_type={resource_type}")
+        logger.debug(f"Запрос ссылки для скачивания: key={public_key}, path='{path_to_request}', file_name='{file_name}', resource_type={resource_type}")
         download_url = await get_public_resource_download_link(public_key, path=path_to_request, session=session)
 
         if download_url:
-            logger.info(f"Obtained download link (attempt 1), REDIRECTING to: {download_url}")
+            logger.info(f"Получена ссылка (попытка 1), РЕДИРЕКТ на: {download_url}")
             return HttpResponseRedirect(download_url)
         else:
-            logger.warning(f"Failed to get download link (1): key={public_key}, path='{path_to_request}', type={resource_type}. Retrying without path...")
+            logger.warning(f"Не удалось получить ссылку (1): key={public_key}, path='{path_to_request}', type={resource_type}. Повтор без path...")
             download_url_retry = await get_public_resource_download_link(public_key, path=None, session=session)
             if download_url_retry:
-                 logger.info(f"Obtained download link (attempt 2, no path), REDIRECTING to: {download_url_retry}")
+                 logger.info(f"Получена ссылка (попытка 2, без path), РЕДИРЕКТ на: {download_url_retry}")
                  return HttpResponseRedirect(download_url_retry)
             else:
-                 logger.error(f"Failed to get download link (2 attempts): key={public_key}. Raising 404.")
+                 logger.error(f"Не удалось получить ссылку (2 попытки): key={public_key}. Ошибка 404.")
                  raise Http404(f"Не удалось получить ссылку для скачивания файла '{file_name}' от API Яндекса.")
 
 
 @require_POST
 async def download_zip(request: HttpRequest) -> HttpResponse:
-    logger.info("Запущен процесс скачивания ZIP-архива (используется zipfile)")
+    logger.info("Запуск скачивания ZIP-архива (используя временные файлы + zipfile)")
     get_session_value = sync_to_async(request.session.get)
     public_key = await get_session_value('public_key')
     resource_type = await get_session_value('resource_type')
     resource_name = await get_session_value('resource_name', 'yadisk-archive')
-    if not public_key: logger.warning("Attempting ZIP download without public_key in session."); raise Http404("Session expired...")
-    if resource_type != 'dir': logger.warning(f"Attempting ZIP download for non-directory: key={public_key}"); return redirect('viewer:index')
+
+    if not public_key:
+        logger.warning("Попытка скачать ZIP без public_key в сессии.")
+        raise Http404("Сессия истекла или не найдена. Пожалуйста, введите URL заново.")
+
+    if resource_type != 'dir':
+        logger.warning(f"Попытка скачать ZIP для ресурса не-папки: key={public_key}, type={resource_type}")
+        return redirect('viewer:index')
 
     selected_paths = request.POST.getlist('selected_files')
-    if not selected_paths: logger.warning("Attempting ZIP download with no files selected."); return redirect('viewer:index')
-    safe_name = slugify(resource_name); safe_name = safe_name or 'archive'
-    zip_filename = f"{safe_name}.zip"
-    logger.info(f"Generating ZIP archive (zipfile) with name: {zip_filename} for {len(selected_paths)} files")
+    if not selected_paths:
+        logger.warning("Попытка скачать ZIP без выбранных файлов.")
+        return redirect('viewer:index')
 
-    async def zip_generator():
-        zip_buffer = io.BytesIO()
-        compression = zipfile.ZIP_STORED
+    safe_name = slugify(resource_name) or 'archive'
+    zip_filename = f"{safe_name}-{now().strftime('%Y%m%d%H%M%S')}.zip"
+    logger.info(f"Генерация ZIP '{zip_filename}' для {len(selected_paths)} файлов.")
+
+    temp_dir_obj = tempfile.TemporaryDirectory()
+    temp_dir_path = temp_dir_obj.name
+    logger.debug(f"Создана временная директория: {temp_dir_path}")
+
+    downloaded_files_map = {}
+    failed_files = []
+    zip_temp_filepath = None
+
+    try:
         async with aiohttp.ClientSession() as session:
-            tasks_get_links = []
-            for path in selected_paths:
-                 logger.debug(f"ZIP: Запрос ссылки для path='{path}'")
-                 tasks_get_links.append(get_public_resource_download_link(public_key, path=path, session=session))
+            link_tasks = []
+            for api_path in selected_paths:
+                path_param = api_path if api_path != '/' else None
+                link_tasks.append(get_public_resource_download_link(public_key, path=path_param, session=session))
 
-            logger.info(f"ZIP: Запрос {len(tasks_get_links)} ссылок на скачивание...")
-            download_links_results = await asyncio.gather(*tasks_get_links, return_exceptions=True)
-            path_link_pairs = []
-            failed_links_count = 0
-            for path, result in zip(selected_paths, download_links_results):
-                if isinstance(result, Exception) or result is None: logger.warning(f"ZIP: Ошибка или нет ссылки для path='{path}': {result}"); failed_links_count += 1
-                else: path_link_pairs.append({'path': path, 'url': result})
-            if not path_link_pairs: logger.error("ZIP: Не удалось получить ни одной ссылки для скачивания."); yield b''; return
-            logger.info(f"ZIP: Начинаем скачивание и упаковку {len(path_link_pairs)} файлов (пропущено {failed_links_count})...")
+            logger.info(f"Запрос {len(link_tasks)} ссылок на скачивание...")
+            download_links_results = await asyncio.gather(*[asyncio.create_task(t) for t in link_tasks], return_exceptions=True)
+
+            files_to_download = []
+            for i, result in enumerate(download_links_results):
+                api_path = selected_paths[i]
+                if isinstance(result, Exception) or result is None:
+                    logger.warning(f"Не удалось получить ссылку для '{api_path}': {result}")
+                    failed_files.append(api_path)
+                else:
+                    files_to_download.append({'api_path': api_path, 'url': result})
+
+            if not files_to_download:
+                logger.error("Не удалось получить ни одной ссылки для скачивания.")
+                temp_dir_obj.cleanup()
+                return HttpResponse("Не удалось получить ссылки для скачивания выбранных файлов.", status=500)
+
+            semaphore = asyncio.Semaphore(DOWNLOAD_CONCURRENCY_LIMIT)
             download_tasks = []
-            zip_write_lock = asyncio.Lock()
-            async def download_and_write(file_info, zip_file_obj):
-                original_path = file_info['path']
-                download_url = file_info['url']
-                archive_name = original_path.lstrip('/')
-                if not archive_name: archive_name = PurePath(original_path).name
+
+            async def download_to_temp(file_info):
+                async with semaphore:
+                    api_path = file_info['api_path']
+                    url = file_info['url']
+                    original_filename = PurePath(api_path.lstrip('/')).name or f"file_{len(downloaded_files_map)}"
+                    temp_file_path = os.path.join(temp_dir_path, f"{original_filename}.{hash(api_path)}.tmp")
+                    logger.debug(f"Начало скачивания '{api_path}' в '{temp_file_path}'")
+                    try:
+                        timeout = aiohttp.ClientTimeout(total=600, connect=30, sock_read=60)
+                        headers = {'User-Agent': 'Mozilla/5.0'}
+                        async with session.get(url, timeout=timeout, headers=headers, allow_redirects=True) as resp:
+                            resp.raise_for_status()
+                            async with aiofiles.open(temp_file_path, mode='wb') as f:
+                                file_size = 0
+                                async for chunk in resp.content.iter_chunked(FILE_CHUNK_SIZE):
+                                    await f.write(chunk)
+                                    file_size += len(chunk)
+                            downloaded_files_map[api_path] = temp_file_path
+                            logger.info(f"Успешно скачан '{api_path}' ({file_size} байт) в '{temp_file_path}'")
+                            return True
+                    except Exception as e:
+                        logger.error(f"Ошибка скачивания файла '{api_path}' с {url}: {e}")
+                        failed_files.append(api_path)
+                        if os.path.exists(temp_file_path):
+                            try: os.remove(temp_file_path)
+                            except OSError: pass
+                        return False
+
+            for file_info in files_to_download:
+                download_tasks.append(asyncio.create_task(download_to_temp(file_info)))
+
+            logger.info(f"Запуск {len(download_tasks)} задач скачивания (лимит {DOWNLOAD_CONCURRENCY_LIMIT})...")
+            await asyncio.gather(*download_tasks)
+
+        if not downloaded_files_map:
+            logger.error("Не удалось скачать ни одного файла.")
+            temp_dir_obj.cleanup()
+            return HttpResponse("Не удалось скачать ни одного из выбранных файлов.", status=500)
+
+        logger.info(f"Скачано {len(downloaded_files_map)} файлов во временную директорию.")
+        if failed_files:
+             logger.warning(f"Не удалось скачать/получить ссылку для {len(failed_files)} файлов: {failed_files}")
+
+        zip_temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+        zip_temp_filepath = zip_temp_file.name
+        zip_temp_file.close()
+        logger.debug(f"Временный файл для ZIP: {zip_temp_filepath}")
+
+        def create_zip_sync():
+            logger.info(f"Начало создания ZIP-архива '{zip_temp_filepath}'...")
+            try:
+                with zipfile.ZipFile(zip_temp_filepath, 'w', compression=zipfile.ZIP_STORED) as zf:
+                    for api_path, temp_file_path in downloaded_files_map.items():
+                        arcname = api_path.lstrip('/')
+                        if not arcname:
+                            arcname = f"file_{hash(api_path)}"
+                        logger.debug(f"Добавление в ZIP: '{temp_file_path}' как '{arcname}'")
+                        zf.write(temp_file_path, arcname=arcname)
+                logger.info(f"ZIP-архив '{zip_temp_filepath}' успешно создан.")
+                return True
+            except Exception as e:
+                logger.exception(f"Ошибка при создании ZIP-архива: {e}")
+                if os.path.exists(zip_temp_filepath):
+                    try: os.remove(zip_temp_filepath)
+                    except OSError: pass
+                return False
+
+        loop = asyncio.get_running_loop()
+        zip_success = await loop.run_in_executor(None, create_zip_sync)
+
+        logger.debug(f"Удаление временной директории со скачанными файлами: {temp_dir_path}")
+        temp_dir_obj.cleanup()
+
+        if not zip_success:
+             if zip_temp_filepath and os.path.exists(zip_temp_filepath):
+                  try: os.remove(zip_temp_filepath)
+                  except OSError: pass
+             return HttpResponse("Ошибка при создании ZIP-архива на сервере.", status=500)
+
+        async def zip_file_stream_generator(filepath_to_stream: str) -> AsyncGenerator[bytes, None]:
+            f = None
+            try:
+                f = await aiofiles.open(filepath_to_stream, mode='rb')
+                while True:
+                    try:
+                        chunk = await f.read(FILE_CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        yield chunk
+                    except StopAsyncIteration:
+                        break
+                logger.info(f"Завершена отправка потока для ZIP '{zip_filename}'")
+            except Exception as e:
+                logger.exception(f"Ошибка при стриминге ZIP файла '{filepath_to_stream}': {e}")
+            finally:
+                if f:
+                    await f.close()
+                    logger.debug(f"aiofiles объект закрыт для: {filepath_to_stream}")
+
+                logger.debug(f"Удаление временного ZIP файла: {filepath_to_stream}")
                 try:
-                    timeout = aiohttp.ClientTimeout(total=600, connect=30, sock_read=60); headers = {'User-Agent': 'Mozilla/5.0'}
-                    async with session.get(download_url, timeout=timeout, headers=headers) as resp:
-                        if resp.status == 200:
-                            file_content = await resp.read()
-                            async with zip_write_lock: zip_file_obj.writestr(archive_name, file_content)
-                            logger.debug(f"ZIP: Добавлен файл: {archive_name} ({len(file_content)} байт)"); return True
-                        else: error_body = await resp.text(); logger.warning(f"ZIP: Не удалось скачать файл {archive_name} ({resp.status}): {error_body[:100]}"); return False
-                except Exception as e: logger.exception(f"ZIP: Ошибка при скачивании/записи файла {archive_name}: {e}"); return False
-            with zipfile.ZipFile(zip_buffer, 'w', compression=compression) as zip_file_sync:
-                 for file_info in path_link_pairs: download_tasks.append(download_and_write(file_info, zip_file_sync))
-                 results = await asyncio.gather(*download_tasks)
-                 successful_files = sum(1 for r in results if r is True)
-                 logger.info(f"ZIP: Успешно обработано {successful_files} из {len(path_link_pairs)} файлов.")
-            zip_buffer.seek(0)
-            logger.info(f"ZIP: Отправка архива '{zip_filename}' клиенту...")
-            while True:
-                chunk = zip_buffer.read(8192)
-                if not chunk:
-                    break
-                yield chunk
-            logger.info(f"ZIP: Отправка архива '{zip_filename}' завершена.")
-    response = StreamingHttpResponse(zip_generator(), content_type='application/zip')
-    try: ascii_name = zip_filename.encode('ascii').decode('ascii'); response['Content-Disposition'] = f'attachment; filename="{ascii_name}"'
-    except UnicodeEncodeError: encoded_name = quote(zip_filename); response['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_name}"
-    return response
+                    await sync_to_async(os.remove)(filepath_to_stream)
+                except OSError as e:
+                    logger.error(f"Не удалось удалить временный ZIP файл '{filepath_to_stream}': {e}")
+
+        response = StreamingHttpResponse(zip_file_stream_generator(zip_temp_filepath), content_type='application/zip')
+        try:
+            ascii_name = zip_filename.encode('ascii').decode('ascii')
+            response['Content-Disposition'] = f'attachment; filename="{ascii_name}"'
+        except UnicodeEncodeError:
+            encoded_name = quote(zip_filename)
+            response['Content-Disposition'] = f"attachment; filename*=UTF-8''{encoded_name}"
+        logger.info(f"Отправка StreamingHttpResponse для ZIP: {zip_filename}")
+        return response
+
+    except Exception as e:
+        logger.exception(f"Критическая ошибка в download_zip: {e}")
+        if 'temp_dir_obj' in locals() and hasattr(temp_dir_obj, 'name') and os.path.exists(temp_dir_obj.name):
+            try:
+                temp_dir_obj.cleanup()
+                logger.debug("Временная директория очищена из-за ошибки.")
+            except Exception as cleanup_err:
+                logger.error(f"Ошибка при очистке временной директории: {cleanup_err}")
+
+        if zip_temp_filepath and os.path.exists(zip_temp_filepath):
+             try:
+                 os.remove(zip_temp_filepath)
+                 logger.debug("Временный ZIP файл удален из-за ошибки.")
+             except OSError as remove_err:
+                 logger.error(f"Ошибка при удалении временного ZIP файла: {remove_err}")
+        return HttpResponse("Внутренняя ошибка сервера при обработке запроса на ZIP-архив.", status=500)

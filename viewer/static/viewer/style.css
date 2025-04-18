@@ -1,0 +1,523 @@
+/* General Styles */
+:root {
+    --primary-color: #007bff;
+    --primary-hover-color: #0056b3;
+    --border-color: #dee2e6;
+    --light-bg-color: #f8f9fa;
+    --text-color: #212529;
+    --text-muted-color: #6c757d;
+    --error-color: #dc3545;
+    --error-bg-color: #f8d7da;
+    --error-border-color: #f5c6cb;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: #fff; 
+    margin: 0;
+    padding: 0;
+}
+
+main {
+    max-width: 960px;
+    margin: 20px auto;
+    padding: 20px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 25px;
+    color: #333;
+    font-weight: 500;
+}
+
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--primary-hover-color);
+    text-decoration: underline;
+}
+
+button,
+input[type="text"] {
+    font-size: 1rem;
+    padding: 10px 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    vertical-align: middle;
+}
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+button:hover {
+    background-color: var(--primary-hover-color);
+}
+
+button:disabled {
+    background-color: #adb5bd;
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+input[type="text"] {
+    margin-right: 5px;
+    flex-grow: 1;
+}
+
+/* Form Styles */
+form[method="post"]:first-of-type {
+    display: flex;
+    margin-bottom: 25px;
+}
+
+.zip-download-form {
+    margin-top: 20px;
+    text-align: right;
+}
+
+.zip-download-form button {
+    margin-top: 10px;
+    padding: 8px 15px;
+}
+
+
+/* Error Message */
+.error {
+    color: var(--error-color);
+    background-color: var(--error-bg-color);
+    border: 1px solid var(--error-border-color);
+    padding: 10px 15px;
+    margin-bottom: 20px;
+    border-radius: 4px;
+}
+
+/* Breadcrumbs */
+.breadcrumbs {
+    font-size: 0.9em;
+    margin-bottom: 15px;
+    color: var(--text-muted-color);
+    padding: 10px;
+    background-color: var(--light-bg-color);
+    border-radius: 4px;
+}
+
+.breadcrumbs strong {
+    font-weight: 600;
+    color: var(--text-color);
+}
+
+/* Filter & Page Size Controls */
+.controls-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.filter-buttons,
+.page-size-controls {
+    font-size: 0.9em;
+    color: var(--text-muted-color);
+}
+
+.filter-buttons a,
+.page-size-controls a,
+.filter-buttons strong,
+.page-size-controls strong {
+    margin-right: 8px;
+    margin-left: 5px;
+    padding: 5px 10px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.filter-buttons a,
+.page-size-controls a {
+    border-color: var(--border-color);
+    background-color: #fff;
+    color: var(--primary-color);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.filter-buttons a:hover,
+.page-size-controls a:hover {
+    background-color: var(--light-bg-color);
+    text-decoration: none;
+    border-color: #adb5bd;
+}
+
+.filter-buttons a.active,
+.page-size-controls strong {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: bold;
+    border-color: var(--primary-color);
+}
+
+/* File List */
+.file-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 15px;
+}
+
+.file-list li {
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    padding: 14px 10px;
+    gap: 15px;
+    transition: background-color 0.15s ease;
+}
+.file-list li:hover {
+    background-color: var(--light-bg-color);
+}
+
+.file-list li:last-child {
+    border-bottom: none;
+}
+
+.file-icon {
+    flex-shrink: 0;
+    width: 30px;
+    height: 30px;
+    object-fit: contain;
+}
+
+.file-preview {
+    flex-shrink: 0;
+    max-height: 48px;
+    max-width: 72px;
+    cursor: pointer;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background-color: #fff;
+}
+
+.file-list input[type="checkbox"] {
+    flex-shrink: 0;
+    cursor: pointer;
+    width: 22px;
+    height: 22px;
+    accent-color: var(--primary-color);
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.file-name {
+    flex-grow: 1;
+    margin-right: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 1rem;
+}
+
+.file-name a {
+    font-weight: 500;
+}
+
+.file-name span {
+    font-weight: normal;
+}
+
+.file-size {
+    color: var(--text-muted-color);
+    min-width: 90px;
+    text-align: right;
+    margin-right: 15px;
+    flex-shrink: 0;
+    font-size: 0.9em;
+}
+
+.file-actions a {
+    padding: 4px 10px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 0.85em;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background-color: #fff;
+    color: var(--primary-color);
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    white-space: nowrap;
+}
+
+.file-actions a:hover {
+    background-color: var(--light-bg-color);
+    border-color: #adb5bd;
+    text-decoration: none;
+}
+
+/* Select All Checkbox */
+.select-all-container {
+    margin-bottom: 5px;
+    font-size: 0.9em;
+    padding-left: 12px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 10px;
+    display: flex;
+    align-items: center; 
+    gap: 15px;          
+}
+
+.select-all-container label {
+    margin-left: 0; 
+    cursor: pointer;
+    color: var(--text-muted-color);
+}
+
+/* No Files Message */
+.no-files-message {
+    margin-top: 15px;
+    color: var(--text-muted-color);
+    padding: 15px;
+    background-color: var(--light-bg-color);
+    border: 1px dashed var(--border-color);
+    border-radius: 4px;
+    text-align: center;
+}
+
+/* Pagination */
+.pagination {
+    margin-top: 25px;
+    margin-bottom: 15px;
+    text-align: center;
+    font-size: 0.9em;
+}
+
+.pagination a,
+.pagination span {
+    margin: 0 4px;
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    text-decoration: none;
+    color: var(--primary-color);
+    border-radius: 4px;
+    background-color: #fff;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+    display: inline-block;
+}
+
+.pagination a:hover {
+    background-color: var(--light-bg-color);
+    border-color: #adb5bd;
+    text-decoration: none;
+}
+
+.pagination span.current {
+    font-weight: bold;
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+    cursor: default;
+}
+
+.pagination span.disabled {
+    color: #adb5bd;
+    border-color: #e9ecef;
+    background-color: var(--light-bg-color);
+    cursor: default;
+}
+
+/* Modal Styles */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    padding-top: 50px;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.85);
+}
+
+.modal-content {
+    margin: auto;
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 90%;
+    max-height: 85vh;
+    animation-name: zoom;
+    animation-duration: 0.4s;
+}
+
+@keyframes zoom {
+    from { transform: scale(0.1); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+#modalCaption {
+    margin: 15px auto;
+    display: block;
+    width: 80%;
+    max-width: 700px;
+    text-align: center;
+    color: #ccc;
+    font-size: 0.9em;
+}
+
+.modal-close {
+    position: absolute;
+    top: 15px;
+    right: 35px;
+    color: #f1f1f1;
+    font-size: 40px;
+    font-weight: bold;
+    transition: 0.3s;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.modal-close:hover,
+.modal-close:focus {
+    color: #bbb;
+    text-decoration: none;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+    main {
+        margin: 10px;
+        padding: 15px;
+    }
+    h1 {
+        font-size: 1.5rem;
+        margin-bottom: 20px;
+    }
+    form[method="post"]:first-of-type {
+        flex-direction: column;
+        gap: 10px;
+    }
+    input[type="text"] {
+        margin-right: 0;
+        width: 100%;
+    }
+    .controls-container {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+    .page-size-controls {
+        text-align: center;
+    }
+    .file-list li {
+        padding: 12px 8px;
+        gap: 12px; 
+    }
+    .file-name {
+        font-size: 0.95rem;
+    }
+    .file-size {
+        min-width: 70px;
+        margin-right: 10px;
+    }
+    .modal-close {
+        top: 10px;
+        right: 20px;
+        font-size: 30px;
+    }
+}
+
+@media (max-width: 480px) {
+    .file-list li {
+        flex-wrap: wrap;
+        gap: 10px; 
+        padding: 10px 5px;
+        align-items: flex-start; 
+    }
+
+    .file-icon {
+        width: 26px; 
+        height: 26px;
+    }
+    .file-preview {
+        max-height: 40px; 
+        max-width: 60px;
+    }
+     .file-list input[type="checkbox"] {
+        width: 20px; 
+        height: 20px;
+        margin-top: 3px; 
+    }
+
+
+    .file-name {
+        flex-basis: 100%;
+        order: 1;
+        margin-right: 0;
+        white-space: normal;
+        margin-bottom: 5px;
+        font-size: 0.9rem; 
+        padding-left: 36px;
+    }
+    .file-icon, .file-preview, .file-list input[type="checkbox"] {
+        order: 0;
+        position: absolute;
+        left: 10px;
+    }
+     .file-list li {
+        position: relative;
+        padding-left: 50px;
+        min-height: 40px; 
+    }
+
+
+    .file-size {
+        order: 2;
+        text-align: left;
+        margin-right: 10px;
+        font-size: 0.8em; 
+        padding-left: 0; 
+    }
+    .file-actions {
+        order: 3;
+        margin-left: auto;
+        padding-left: 10px; 
+    }
+    .pagination a, .pagination span {
+        padding: 5px 8px;
+        margin: 0 2px;
+    }
+    .filter-buttons a, .page-size-controls a, .filter-buttons strong, .page-size-controls strong {
+         padding: 4px 8px;
+         margin-right: 5px;
+         margin-left: 3px;
+    }
+
+    .select-all-container {
+       padding-left: 10px; 
+       gap: 10px;
+    }
+     .select-all-container input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+    }
+
+}

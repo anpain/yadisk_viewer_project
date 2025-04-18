@@ -85,7 +85,7 @@
                         {% else %}
                         <input type="checkbox" name="selected_files" value="{{ item.normalized_api_path }}" aria-label="Выбрать {{ item.name }}">
                             {% if item.preview %}
-                                <img src="{{ item.preview }}" alt="Превью {{ item.name }}" class="file-preview" data-fullsize="{{ item.file }}">
+                                <img src="{{ item.preview }}" alt="{{ item.name }}" class="file-preview" data-fullsize="{{ item.file }}">
                             {% else %}
                                 <img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">
                             {% endif %}
@@ -112,7 +112,7 @@
         {% elif data.type == 'file' %}
              <ul class="file-list">
                  <li>
-                     {% if data.preview %}<img src="{{ data.preview }}" alt="Превью {{ data.name }}" class="file-preview" data-fullsize="{{ data.file }}">
+                     {% if data.preview %}<img src="{{ data.preview }}" alt="{{ data.name }}" class="file-preview" data-fullsize="{{ data.file }}">
                      {% else %}<img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">{% endif %}
                      <span class="file-name"><span>{{ data.name }}</span></span>
                      <span class="file-size">{{ data.size|filesizeformat }}</span>
