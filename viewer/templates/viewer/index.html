@@ -1,162 +1,252 @@
 {% extends "viewer/base.html" %}
 {% load static %}
 {% load humanize %}
+{% load viewer_extras %}
 
-{% block title %}Просмотр ссылки Яндекс.Диска{% endblock %}
+{% block title %}Просмотр: {{ data.name|default:"Яндекс.Диск" }}{% endblock %}
 
 {% block content %}
-    <form method="post">
+    {# URL Input Form #}
+    <form method="post" class="url-input-form" action="{% url 'viewer:index' %}">
         {% csrf_token %}
-        <input type="text" name="public_url" placeholder="Вставьте публичную ссылку Яндекс.Диска..." value="{{ public_url|default:'' }}" required>
+        <input type="text" name="public_url" placeholder="Вставьте публичную ссылку Яндекс.Диска..."
+               value="{{ public_url|default:'' }}" required
+               aria-label="Публичная ссылка Яндекс.Диска">
         <button type="submit">Обзор</button>
     </form>
 
+    {# Error Display #}
     {% if error %}
         <p class="error">{{ error }}</p>
     {% endif %}
 
-    {% if data %}
-         <p class="breadcrumbs" style="font-size: 0.9em; margin-bottom: 10px;">
-            {% for crumb in breadcrumbs %}
-                {% if not forloop.last %}
-                     {% url 'viewer:index' as base_index_url %}
-                     <a href="{{ base_index_url }}?public_url={{ public_url|urlencode }}&path={{ crumb.path|urlencode }}">{{ crumb.name }}</a> /
-                {% else %}
-                    <strong>{{ data.name }}</strong> 
-                {% endif %}
-            {% endfor %}
-        </p>
+    {# Content Display Area #}
+    {% if data or items is not None %}
 
-        {% if available_file_types or data.type == 'dir' and items is not None %}
-            <div class="filter-buttons">
-                Фильтр:
-                {% url 'viewer:index' as base_index_url %}
-                {% with request_params=request.GET.copy %}{% with _=request_params.pop %}
-                {% with base_query=request_params.urlencode %}{% endwith %}
-                    <a href="{{ base_index_url }}?{{ base_query }}&filter=all" data-filter="all" class="{% if filter_type == 'all' %}active{% endif %}">Все</a>
-                    {% if 'image' in available_file_types %}<a href="{{ base_index_url }}?{{ base_query }}&filter=image" data-filter="image" class="{% if filter_type == 'image' %}active{% endif %}">Изображения</a>{% endif %}
-                    {% if 'document' in available_file_types %}<a href="{{ base_index_url }}?{{ base_query }}&filter=document" data-filter="document" class="{% if filter_type == 'document' %}active{% endif %}">Документы</a>{% endif %}
-                    {% if 'archive' in available_file_types %}<a href="{{ base_index_url }}?{{ base_query }}&filter=archive" data-filter="archive" class="{% if filter_type == 'archive' %}active{% endif %}">Архивы</a>{% endif %}
-                    {% if 'video' in available_file_types %}<a href="{{ base_index_url }}?{{ base_query }}&filter=video" data-filter="video" class="{% if filter_type == 'video' %}active{% endif %}">Видео</a>{% endif %}
-                    {% if 'audio' in available_file_types %}<a href="{{ base_index_url }}?{{ base_query }}&filter=audio" data-filter="audio" class="{% if filter_type == 'audio' %}active{% endif %}">Аудио</a>{% endif %}
-                    {% if 'other' in available_file_types %}<a href="{{ base_index_url }}?{{ base_query }}&filter=other" data-filter="other" class="{% if filter_type == 'other' %}active{% endif %}">Прочее</a>{% endif %}
-                {% endwith %}{% endwith %}
-            </div>
-        {% endif %}
-
-        {% if pagination and data.type == 'dir' %}
-            <div class="page-size-controls">
-                Показывать по:
-                {% url 'viewer:index' as base_index_url %}
-                 {% with request_params=request.GET.copy %}{% with _=request_params.pop _=request_params.pop %}
-                {% with base_query=request_params.urlencode %}{% endwith %}
-                {% for size in allowed_page_sizes %}
-                    {% if size == current_page_size %}
-                        <strong>{{ size }}</strong>
-                    {% else %}
-                        <a href="{{ base_index_url }}?{{ base_query }}&limit={{ size }}&page=1">{{ size }}</a>
-                    {% endif %}
-                {% endfor %}
-                {% endwith %}{% endwith %}
-            </div>
-        {% endif %}
-
-        {% if data.type == 'dir' %}
-        <form id="zip-form" action="{% url 'viewer:download_zip' %}" method="post" class="zip-download-form">
-            {% csrf_token %}
-            <ul class="file-list">
-                {% if items %}
-                <li class="select-all-container">
-                     <input type="checkbox" id="select-all" title="Выбрать все/Снять выделение">
-                     <label for="select-all" style="cursor: pointer; margin-left: 5px;">Выбрать все</label>
-                </li>
-                {% endif %}
-
-                {% for item in items %}
-                    <li>
-                        {% if item.type == 'dir' %}
-                            <img src="{% static 'viewer/folder.png' %}" alt="Папка" class="file-icon">
-                             <span class="file-name">
-                                {% url 'viewer:index' as base_index_url %}
-                                <a href="{{ base_index_url }}?public_url={{ public_url|urlencode }}&path={{ item.path_param|urlencode }}">{{ item.name }}</a>
-                             </span>
-                             <span class="file-size">Папка</span>
-                             <span class="file-actions"></span>
+        {# Breadcrumbs #}
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumbs">
+                {% for crumb in breadcrumbs %}
+                    <li class="breadcrumb-item {% if forloop.last %}active{% endif %}">
+                        {% if not forloop.last %}
+                            {% url 'viewer:index' as base_index_url %}
+                            {% with request_params=request.GET.copy %}
+                                {% dict_set request_params "path" crumb.path as updated_params %}  
+                                <a href="{{ base_index_url }}?{{ updated_params.urlencode }}">{{ crumb.name }}</a>
+                            {% endwith %}
                         {% else %}
-                        <input type="checkbox" name="selected_files" value="{{ item.normalized_api_path }}" aria-label="Выбрать {{ item.name }}">
-                            {% if item.preview %}
-                                <img src="{{ item.preview }}" alt="{{ item.name }}" class="file-preview" data-fullsize="{{ item.file }}">
-                            {% else %}
-                                <img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">
-                            {% endif %}
-                            <span class="file-name"><span>{{ item.name }}</span></span>
-                            <span class="file-size">{{ item.size|filesizeformat }}</span>
-                            <span class="file-actions">
-                                {% if item.url_path is not None %}
-                                    {% url 'viewer:download_file' file_path=item.url_path as download_url %}
-                                    <a href="{{ download_url }}" title="Скачать {{ item.name }}">Скачать</a>
-                                {% endif %}
-                            </span>
+                             <strong>{{ data.name|default:crumb.name }}</strong>
                         {% endif %}
                     </li>
-                {% empty %}
-                     <li class="no-files-message">Нет файлов или папок для отображения.</li>
                 {% endfor %}
-            </ul>
+            </ol>
+        </nav>
 
-            {% if items %}
-                <button type="submit" disabled>Скачать выбранное (.zip)</button>
+        {# Controls: Filters and Page Size #}
+        {% if data.type == 'dir' %}
+        <div class="controls-container">
+
+            {# Filter Buttons #}
+            {% if available_file_types %}
+                <div class="filter-buttons">
+                    Фильтр:
+                    {% url 'viewer:index' as base_index_url %}
+                    {% available_file_types_map as filter_map %}
+                    {% with request_params=request.GET.copy %}
+                        {% dict_del request_params "page" as params_no_page %}  
+                        {% dict_set params_no_page 'filter' 'all' as params_filter_all %}  
+                        <a href="{{ base_index_url }}?{{ params_filter_all.urlencode }}"
+                           class="{% if filter_type == 'all' %}active{% endif %}">Все</a>
+                        {% for type_key, type_name in filter_map.items %}
+                             {% if type_key in available_file_types %}
+                                 {% dict_set params_no_page 'filter' type_key as params_filter_type %}  
+                                <a href="{{ base_index_url }}?{{ params_filter_type.urlencode }}"
+                                   class="{% if filter_type == type_key %}active{% endif %}">{{ type_name }}</a>
+                             {% endif %}
+                        {% endfor %}
+                    {% endwith %}
+                </div>
             {% endif %}
-        </form>
+
+            {# Page Size Controls #}
+            {% if pagination %}
+                <div class="page-size-controls">
+                    По:
+                    {% url 'viewer:index' as base_index_url %}
+                    {% with request_params=request.GET.copy %}
+                        {% dict_del request_params "page" as params_no_page %}  
+                        {% for size in allowed_page_sizes %}
+                             {% if size == current_page_size %}
+                                 <strong>{{ size }}</strong>
+                             {% else %}
+                                 {% dict_set params_no_page 'limit' size as params_limit_size %}  
+                                 <a href="{{ base_index_url }}?{{ params_limit_size.urlencode }}">{{ size }}</a>
+                             {% endif %}
+                        {% endfor %}
+                    {% endwith %}
+                </div>
+            {% endif %}
+
+        </div>
+        {% endif %} 
+
+
+        {# File/Folder List #}
+        {% if data.type == 'dir' %}
+            {# Form for selecting files for ZIP download #}
+            <form id="zip-form" action="{% url 'viewer:download_zip' %}" method="post" class="zip-download-form">
+                {% csrf_token %}
+                <ul class="file-list">
+                    {% if items|filter_files %}
+                    <li class="select-all-container">
+                         <input type="checkbox" id="select-all" title="Выбрать все / Снять выделение">
+                         <label for="select-all">Выбрать все файлы</label>
+                    </li>
+                    {% endif %}
+
+                    {% for item in items %}
+                        <li class="{% if item.type == 'dir' %}list-item-dir{% else %}list-item-file{% endif %}">
+                            {% if item.type == 'dir' %}
+                                <span class="file-icon-container">
+                                    <img src="{% static 'viewer/folder.png' %}" alt="Папка" class="file-icon">
+                                </span>
+                                <span class="file-name">
+                                    {% url 'viewer:index' as base_index_url %}
+                                    {% with request_params=request.GET.copy %}
+                                        {% dict_set request_params "path" item.path_param as params_path %}  
+                                        {% dict_del params_path "page" as params_final %}  
+                                        <a href="{{ base_index_url }}?{{ params_final.urlencode }}">{{ item.name }}</a>
+                                    {% endwith %}
+                                </span>
+                                <span class="file-size">Папка</span>
+                                <span class="file-actions"></span> 
+
+                            {% else %}
+                                <span class="file-select-container">
+                                     <input type="checkbox" name="selected_files" value="{{ item.normalized_api_path }}"
+                                            aria-label="Выбрать {{ item.name }}">
+                                </span>
+                                <span class="file-icon-container">
+                                     {% if item.preview %}
+                                         <img src="{{ item.preview }}" alt="{{ item.name }}" class="file-preview"
+                                              data-fullsize="{{ item.file }}" loading="lazy">
+                                     {% else %}
+                                         <img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">
+                                     {% endif %}
+                                </span>
+                                <span class="file-name" title="{{ item.name }}"><span>{{ item.name }}</span></span>
+                                <span class="file-size">{{ item.size|default:0|filesizeformat }}</span>
+                                <span class="file-actions">
+                                    {% if item.url_path is not None %}
+                                        {% url 'viewer:download_file' file_path="___PLACEHOLDER___" as base_download_url %}
+                                        <a href="{% url 'viewer:download_file' file_path=item.url_path %}" title="Скачать {{ item.name }}" download>Скачать</a>
+                                    {% else %}
+                                         <span class="action-disabled">Нет ссылки</span>
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                        </li>
+                    {% empty %}
+                         <li class="no-files-message">В этой папке нет файлов или подпапок.</li>
+                    {% endfor %}
+                </ul>
+
+                {# ZIP Download Button - only if there are selectable items (files) #}
+                {% if items|filter_files %}
+                 <button type="submit" disabled>Скачать выбранное (.zip)</button>
+                {% endif %}
+            </form>
 
         {% elif data.type == 'file' %}
-             <ul class="file-list">
-                 <li>
-                     {% if data.preview %}<img src="{{ data.preview }}" alt="{{ data.name }}" class="file-preview" data-fullsize="{{ data.file }}">
-                     {% else %}<img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">{% endif %}
+             <ul class="file-list single-file-list">
+                 <li class="list-item-file">
+                      <span class="file-icon-container">
+                           {% if data.preview %}
+                               <img src="{{ data.preview }}" alt="{{ data.name }}" class="file-preview" data-fullsize="{{ data.file }}">
+                           {% else %}
+                               <img src="{% static 'viewer/file.png' %}" alt="Файл" class="file-icon">
+                           {% endif %}
+                      </span>
                      <span class="file-name"><span>{{ data.name }}</span></span>
-                     <span class="file-size">{{ data.size|filesizeformat }}</span>
+                     <span class="file-size">{{ data.size|default:0|filesizeformat }}</span>
                      <span class="file-actions">
                         {% if data.url_path is not None %}
-                            {% url 'viewer:download_file' file_path=data.url_path as download_url %}
-                            <a href="{{ download_url }}" title="Скачать {{ data.name }}">Скачать</a>
+                             {% url 'viewer:download_file' file_path="___PLACEHOLDER___" as base_download_url %}
+                             <a href="{% url 'viewer:download_file' file_path=data.url_path %}" title="Скачать {{ data.name }}" download>Скачать</a>
+                        {% else %}
+                             <span class="action-disabled">Нет ссылки</span>
                         {% endif %}
                      </span>
                  </li>
              </ul>
         {% else %}
              {% if not error %}
-             <p class="no-files-message">Не удалось получить содержимое по ссылке или папка пуста.</p>
+             <p class="no-files-message">Не удалось отобразить содержимое. Возможно, ссылка указывает на пустой ресурс.</p>
              {% endif %}
-        {% endif %}
+        {% endif %} 
 
+        {# Pagination Controls #}
         {% if pagination and data.type == 'dir' %}
-            <div class="pagination">
-                {% url 'viewer:index' as base_index_url %}
-                {% with request_params=request.GET.copy %}{% with _=request_params.pop %}
-                {% if pagination.has_previous %}
-                    {% with prev_page=pagination.current_page|add:"-1" %}{% endwith %}
-                    {% with page_query=request_params.urlencode %}{% endwith %}
-                    <a href="{{ base_index_url }}?{{ page_query }}&page={{ prev_page }}">« Назад</a>
-                {% else %}
-                    <span class="disabled">« Назад</span>
-                {% endif %}
+            <nav aria-label="Навигация по страницам">
+                <div class="pagination">
+                    {% url 'viewer:index' as base_index_url %}
+                    {% with request_params=request.GET.copy %}
 
-                <span class="current">
-                    Стр. {{ pagination.current_page }} из {{ pagination.total_pages }}
-                </span>
+                    {# Previous Page Link #}
+                    {% if pagination.has_previous %}
+                        {% with prev_page=pagination.current_page|add:"-1" %}
+                            {% dict_set request_params 'page' prev_page as params_prev %}  
+                            <a href="{{ base_index_url }}?{{ params_prev.urlencode }}"
+                               class="page-link page-prev" aria-label="Предыдущая страница">« Назад</a>
+                        {% endwith %}
+                    {% else %}
+                        <span class="page-link disabled page-prev" aria-disabled="true">« Назад</span>
+                    {% endif %}
 
-                {% if pagination.has_next %}
-                     {% with next_page=pagination.current_page|add:"1" %}{% endwith %}
-                     {% with page_query=request_params.urlencode %}{% endwith %}
-                     <a href="{{ base_index_url }}?{{ page_query }}&page={{ next_page }}">Вперед »</a>
-                {% else %}
-                    <span class="disabled">Вперед »</span>
-                {% endif %}
-                 {% endwith %}{% endwith %}
-            </div>
+                    {# Page Number Links #}
+                    <span class="page-numbers">
+                        {% if pagination.needs_first_ellipses %}
+                            {% dict_set request_params 'page' 1 as params_first %}  
+                            <a href="{{ base_index_url }}?{{ params_first.urlencode }}" class="page-link">1</a>
+                            <span class="page-link ellipses" aria-hidden="true">…</span>
+                        {% endif %}
+                        {% for page_num in pagination.page_range %}
+                             {% if page_num == pagination.current_page %}
+                                 <span class="page-link current" aria-current="page">{{ page_num }}</span>
+                             {% else %}
+                                 {% dict_set request_params 'page' page_num as params_page %}  
+                                 <a href="{{ base_index_url }}?{{ params_page.urlencode }}" class="page-link">{{ page_num }}</a>
+                             {% endif %}
+                        {% endfor %}
+                         {% if pagination.needs_last_ellipses %}
+                             <span class="page-link ellipses" aria-hidden="true">…</span>
+                            {% dict_set request_params 'page' pagination.total_pages as params_last %}  
+                            <a href="{{ base_index_url }}?{{ params_last.urlencode }}" class="page-link">{{ pagination.total_pages }}</a>
+                         {% endif %}
+                    </span>
+
+
+                    {# Next Page Link #}
+                    {% if pagination.has_next %}
+                         {% with next_page=pagination.current_page|add:"1" %}
+                             {% dict_set request_params 'page' next_page as params_next %}  
+                             <a href="{{ base_index_url }}?{{ params_next.urlencode }}"
+                                class="page-link page-next" aria-label="Следующая страница">Вперед »</a>
+                         {% endwith %}
+                    {% else %}
+                        <span class="page-link disabled page-next" aria-disabled="true">Вперед »</span>
+                    {% endif %}
+
+                    {% endwith %}
+                </div>
+                {% if pagination.total_items %}
+                     <div class="pagination-summary">
+                         Элементы {{ pagination.start_index|default:"?" }} - {{ pagination.end_index|default:"?" }} из {{ pagination.total_items }}
+                     </div>
+                 {% endif %}
+            </nav>
         {% endif %}
 
-    {% endif %}
+    {% endif %} 
 
 {% endblock %}
